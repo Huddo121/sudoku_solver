@@ -26,11 +26,25 @@ defmodule SudokuSolver do
             n <- ["123", "456", "789"],
             do: cross(String.codepoints(l), String.codepoints(n)) |> List.flatten
 
-        %{
-            :rows => row_unit,
-            :columns => col_unit,
-            :boxes => box_unit
-        }
+        # Create a map to relate each cell with a list of its neighbours
+        results = for cell <- row_unit |> List.flatten do
+            neighbours = [  Enum.find(row_unit, fn(neighbours) -> Enum.member?(neighbours, cell) end),
+                            Enum.find(col_unit, fn(neighbours) -> Enum.member?(neighbours, cell) end),
+                            Enum.find(box_unit, fn(neighbours) -> Enum.member?(neighbours, cell) end)
+                        ]   |> List.flatten
+                            |> Enum.uniq
+
+            {cell, neighbours}
+        end
+
+        Map.new(results)
     end
 
+    defp cross(a, b) do
+        for aprime <- a do
+            for bprime <- b do
+                aprime <> bprime
+            end
+        end
+    end
 end
