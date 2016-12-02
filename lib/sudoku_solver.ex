@@ -1,5 +1,11 @@
 defmodule SudokuSolver do
     
+
+    # Define some constants for our playing field
+    @rows String.codepoints("ABCDEFGHI")
+    @cols String.codepoints("123456789")
+    @cells for a <- @rows, b <- @cols, do: a <> b
+
     def load_file(filename) do
         {:ok, file} = File.read(filename)
         puzzles = file 
@@ -12,11 +18,9 @@ defmodule SudokuSolver do
     end
 
     def get_peers() do
-        rows = String.codepoints("ABCDEFGHI")
-        cols = String.codepoints("123456789")
 
         # Get a list of the row elements that are mutual neighbours
-        row_unit = cross(rows, cols)
+        row_unit = cross(@rows, @cols)
 
         # Get a list of column elements that are mutual neighbours
         col_unit = for unit <- List.zip(row_unit), do: Tuple.to_list(unit)
@@ -33,6 +37,7 @@ defmodule SudokuSolver do
                             Enum.find(box_unit, fn(neighbours) -> Enum.member?(neighbours, cell) end)
                         ]   |> List.flatten
                             |> Enum.uniq
+                            |> List.delete(cell)
 
             {cell, neighbours}
         end
