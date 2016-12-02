@@ -52,4 +52,10 @@ defmodule SudokuSolver do
             end
         end
     end
+
+    # Create a map along the lines of %{ "A1" => "3", "A2" => ".", "A3" => 8, ...} for an existing puzzle
+    def grid_values(puzzle) do
+        Map.new(List.zip([@cells, String.codepoints(puzzle)]))
+    end
+
 end
