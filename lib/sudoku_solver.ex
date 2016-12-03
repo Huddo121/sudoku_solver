@@ -53,6 +53,29 @@ defmodule SudokuSolver do
         end
     end
 
+    @doc """
+        Displays a parsed puzzle as a 2D grid of values
+    """
+    def display(puzzle) when is_map(puzzle) do
+        width = 1 + Enum.max(for value <- Map.values(puzzle), do: length(value))
+        line = [String.duplicate("-", width * 3)]
+        lines = line ++ line ++ line
+        horizontal_bar = Enum.join(lines, "+") <> "\n"
+
+        delimiters = ["3", "6", "C", "F"]
+
+        rows_text = for row <- @rows do
+            cols_text = for col <- @cols do
+                cell = row <> col
+                cell_text = String.pad_leading(Enum.join(puzzle[cell]), width)
+                cell_text <> if col in delimiters, do: "|", else: ""
+            end
+            Enum.join(cols_text ++ [("\n" <> if row in delimiters, do: horizontal_bar, else: "")])
+        end
+
+        Enum.join(rows_text)
+    end
+
     # Create a map along the lines of %{ "A1" => "3", "A2" => ".", "A3" => 8, ...} for an existing puzzle
     def grid_values(puzzle) do
         Map.new(List.zip([@cells, String.codepoints(puzzle)]))
