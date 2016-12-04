@@ -53,6 +53,65 @@ defmodule SudokuSolver do
         end
     end
 
+    def parse_grid(puzzle) do
+        default_playfield = Map.new(for cell <- @cells, do: {cell, @cols})
+        puzzle_playfield = grid_values(puzzle)
+
+        # Go through and add all the values from the provided puzzle to a default playfield
+        Enum.reduce(puzzle_playfield, {nil, default_playfield}, fn (cell_tuple, puzzle_tuple)->
+            cell = elem(cell_tuple, 0)
+            value = elem(cell_tuple, 1)
+            case Integer.parse(value) do
+              # There is surely a better way to do this
+              {_, _} -> assign(elem(puzzle_tuple, 1), cell, value)
+              :error -> puzzle_tuple
+            end
+         end)
+
+    end
+
+    @doc """
+        Assigns the given value to the given cell, and removes that value from the peers
+        of that cell.
+    """
+    def assign(puzzle, cell, value) do
+        other_values = List.delete(puzzle[cell], value)
+        eliminate(puzzle, cell, other_values)
+    end
+
+    def eliminate(puzzle, _cell, []) do
+      {:ok, puzzle}
+    end
+
+    def eliminate(puzzle, cell, [ value | remaining ]) do
+        case eliminate_individual(puzzle, cell, value) do
+          {:ok, puzzle} -> eliminate(puzzle, cell, remaining)
+          {:error, message} -> {:error, message}
+        end
+    end
+
+    def eliminate_individual(puzzle, cell, value) do
+        if Enum.member?(puzzle[cell], value) do
+            # Actually gotta check for solution, propogate constraints
+            puzzle = Map.put(puzzle, cell, List.delete(puzzle[cell], value))
+            cond do
+              puzzle[cell] |> length == 0 ->
+                {:error, "Contradiction: Eliminated all possibilites for cell #{cell}"}
+              puzzle[cell] |> length == 1 ->
+                Enum.reduce(get_peers[cell],
+                            {nil, puzzle},
+                            fn(new_cell, puzztup) ->
+                                eliminate_individual(elem(puzztup, 1), new_cell, List.first(puzzle[cell]))
+                            end
+                        )
+              true -> {:ok, puzzle}
+            end
+        else
+            # Nothing to remove
+            {:ok, puzzle}
+        end
+    end
+
     @doc """
         Displays a parsed puzzle as a 2D grid of values
     """
