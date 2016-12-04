@@ -127,6 +127,7 @@ defmodule SudokuSolver do
             cols_text = for col <- @cols do
                 cell = row <> col
                 cell_text = String.pad_leading(Enum.join(puzzle[cell]), width)
+                cell_text = String.pad_trailing(Enum.join(puzzle[cell]), width)
                 cell_text <> if col in delimiters, do: "|", else: ""
             end
             Enum.join(cols_text ++ [("\n" <> if row in delimiters, do: horizontal_bar, else: "")])
