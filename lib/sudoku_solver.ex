@@ -6,6 +6,23 @@ defmodule SudokuSolver do
     @cols String.codepoints("123456789")
     @cells for a <- @rows, b <- @cols, do: a <> b
 
+    @row_units for r <- @rows, do: for c <- @cols, do: r <> c
+    @col_units for unit <- List.zip(@row_units), do: Tuple.to_list(unit)
+    @box_units for l <- ["ABC", "DEF", "GHI"],
+                   n <- ["123", "456", "789"],
+                   do: (for alpha <- String.codepoints(l), do: for numeric <- String.codepoints(n), do: alpha <> numeric) |> List.flatten
+
+    @units Map.new(for cell <- @cells do
+                                  units = [ Enum.find(@row_units, fn(neighbours) -> Enum.member?(neighbours, cell) end),
+                                            Enum.find(@col_units, fn(neighbours) -> Enum.member?(neighbours, cell) end),
+                                            Enum.find(@box_units, fn(neighbours) -> Enum.member?(neighbours, cell) end)]
+
+                                  {cell, units}
+                              end)
+    @peers Map.new(for cell <- @cells do
+                       {cell, @units[cell] |> List.flatten |> Enum.uniq |> List.delete(cell)}
+                   end)
+
     def load_file(filename) do
         {:ok, file} = File.read(filename)
         puzzles = file 
@@ -17,38 +34,6 @@ defmodule SudokuSolver do
 
     end
 
-    def get_peers() do
-
-        # Get a list of the row elements that are mutual neighbours
-        row_unit = cross(@rows, @cols)
-
-        # Get a list of column elements that are mutual neighbours
-        col_unit = for unit <- List.zip(row_unit), do: Tuple.to_list(unit)
-
-        # Get the list of box neighbours
-        box_unit = for l <- ["ABC", "DEF", "GHI"],
-            n <- ["123", "456", "789"],
-            do: cross(String.codepoints(l), String.codepoints(n)) |> List.flatten
-
-        # Create a map to relate each cell with a list of its neighbours
-        results = for cell <- row_unit |> List.flatten do
-            neighbours = [  Enum.find(row_unit, fn(neighbours) -> Enum.member?(neighbours, cell) end),
-                            Enum.find(col_unit, fn(neighbours) -> Enum.member?(neighbours, cell) end),
-                            Enum.find(box_unit, fn(neighbours) -> Enum.member?(neighbours, cell) end)
-                        ]   |> List.flatten
-                            |> Enum.uniq
-                            |> List.delete(cell)
-
-            {cell, neighbours}
-        end
-
-        Map.new(results)
-    end
-
-    defp cross(a, b) do
-        for aprime <- a do
-            for bprime <- b do
-                aprime <> bprime
             end
         end
     end
@@ -98,7 +83,7 @@ defmodule SudokuSolver do
               puzzle[cell] |> length == 0 ->
                 {:error, "Contradiction: Eliminated all possibilites for cell #{cell}"}
               puzzle[cell] |> length == 1 ->
-                Enum.reduce(get_peers[cell],
+                Enum.reduce(@peers[cell],
                             {nil, puzzle},
                             fn(new_cell, puzztup) ->
                                 eliminate_individual(elem(puzztup, 1), new_cell, List.first(puzzle[cell]))
@@ -126,7 +111,6 @@ defmodule SudokuSolver do
         rows_text = for row <- @rows do
             cols_text = for col <- @cols do
                 cell = row <> col
-                cell_text = String.pad_leading(Enum.join(puzzle[cell]), width)
                 cell_text = String.pad_trailing(Enum.join(puzzle[cell]), width)
                 cell_text <> if col in delimiters, do: "|", else: ""
             end
