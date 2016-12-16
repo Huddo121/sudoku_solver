@@ -1,5 +1,4 @@
 defmodule SudokuSolver do
-    
 
     # Define some constants for our playing field
     @rows String.codepoints("ABCDEFGHI")
@@ -25,17 +24,13 @@ defmodule SudokuSolver do
 
     def load_file(filename) do
         {:ok, file} = File.read(filename)
-        puzzles = file 
+        puzzles = file
                     |> String.replace("|", "")
                     |> String.replace("-", "")
                     |> String.replace("0", ".")
                     |> String.replace_trailing("\n", "")
                     |> String.split("\n")
 
-    end
-
-            end
-        end
     end
 
     def parse_grid(puzzle) do
@@ -52,7 +47,6 @@ defmodule SudokuSolver do
               :error -> puzzle_tuple
             end
          end)
-
     end
 
     @doc """
@@ -69,10 +63,17 @@ defmodule SudokuSolver do
     end
 
     def eliminate(puzzle, cell, [ value | remaining ]) do
-        case eliminate_individual(puzzle, cell, value) do
+        case strip_out(puzzle, cell, value) do
           {:ok, puzzle} -> eliminate(puzzle, cell, remaining)
           {:error, message} -> {:error, message}
         end
+    end
+
+    defp strip_out(puzzle, cell, value) do
+      case eliminate_individual(puzzle, cell, value) do
+        {:ok, puzzle} -> check_units(puzzle, cell, value)
+        {:error, message} -> {:error, message}
+      end
     end
 
     def eliminate_individual(puzzle, cell, value) do
@@ -86,7 +87,7 @@ defmodule SudokuSolver do
                 Enum.reduce(@peers[cell],
                             {nil, puzzle},
                             fn(new_cell, puzztup) ->
-                                eliminate_individual(elem(puzztup, 1), new_cell, List.first(puzzle[cell]))
+                                strip_out(elem(puzztup, 1), new_cell, List.first(puzzle[cell]))
                             end
                         )
               true -> {:ok, puzzle}
@@ -95,6 +96,28 @@ defmodule SudokuSolver do
             # Nothing to remove
             {:ok, puzzle}
         end
+    end
+
+    defp check_units(puzzle, cell, value) do
+
+      Enum.reduce(@units[cell], {nil, puzzle}, fn(unit, puzztup) ->
+        Enum.reduce(unit, puzztup, fn(u, puzztup) ->
+          my_puzzle = elem(puzztup, 1)
+          dplaces = for s <- unit, Enum.member?(my_puzzle[s], value), do: s
+          cond do
+            # If we remove the last option for a cell, bail
+            length(dplaces) == 0 -> {:error, "Unable to place #{value} after modifying #{cell}"}
+            # If there is only one option for a cell, assign it and update the neighbours
+            length(dplaces) == 1 ->
+              assign(my_puzzle, List.first(dplaces), value)
+            # Otherwise there isn't enough information for us to do anything
+            true -> {:ok, my_puzzle}
+          end
+        end
+        )
+
+        end
+      )
     end
 
     @doc """
