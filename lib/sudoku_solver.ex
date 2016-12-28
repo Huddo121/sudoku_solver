@@ -84,10 +84,14 @@ defmodule SudokuSolver do
               puzzle[cell] |> length == 0 ->
                 {:error, "Contradiction: Eliminated all possibilites for cell #{cell}"}
               puzzle[cell] |> length == 1 ->
-                Enum.reduce(@peers[cell],
+                Enum.reduce_while(@peers[cell],
                             {nil, puzzle},
                             fn(new_cell, puzztup) ->
-                                strip_out(elem(puzztup, 1), new_cell, List.first(puzzle[cell]))
+                              {response, result} = strip_out(elem(puzztup, 1), new_cell, List.first(puzzle[cell]))
+                              cond do
+                                response == :ok -> {:cont, {response, result}}
+                                response == :error -> {:halt, {response, result}}
+                              end
                             end
                         )
               true -> {:ok, puzzle}
@@ -100,24 +104,78 @@ defmodule SudokuSolver do
 
     defp check_units(puzzle, cell, value) do
 
-      Enum.reduce(@units[cell], {nil, puzzle}, fn(unit, puzztup) ->
-        Enum.reduce(unit, puzztup, fn(u, puzztup) ->
+      Enum.reduce_while(@units[cell], {nil, puzzle}, fn(unit, puzztup) ->
+        {response, result} = Enum.reduce_while(unit, puzztup, fn(u, puzztup) ->
           my_puzzle = elem(puzztup, 1)
           dplaces = for s <- unit, Enum.member?(my_puzzle[s], value), do: s
           cond do
             # If we remove the last option for a cell, bail
-            length(dplaces) == 0 -> {:error, "Unable to place #{value} after modifying #{cell}"}
+            length(dplaces) == 0 -> {:halt, {:error, "Unable to place #{value} after modifying #{cell}"}}
             # If there is only one option for a cell, assign it and update the neighbours
             length(dplaces) == 1 ->
-              assign(my_puzzle, List.first(dplaces), value)
+              {response, result} = assign(my_puzzle, List.first(dplaces), value)
+              cond do
+                response == :ok -> {:cont, {response, result}}
+                response == :error -> {:halt, {response, result}}
+              end
             # Otherwise there isn't enough information for us to do anything
-            true -> {:ok, my_puzzle}
+            true -> {:cont, {:ok, my_puzzle}}
           end
         end
         )
 
+        cond do
+          response == :ok -> {:cont, {response, result}}
+          response == :error -> {:halt, {response, result}}
+        end
+
         end
       )
+    end
+
+    def solve(puzzle) when is_binary(puzzle) do
+      {:ok, puzzle_map} = puzzle |> parse_grid
+      case search(puzzle_map) do
+        {:halt, solution} -> solution # if it's already solved, we'll see this
+        solution -> solution          # if it took some work, we'll see this
+      end
+    end
+
+    defp search(puzzle) do
+      if(is_solved(puzzle)) do
+        {:halt, puzzle}
+      else
+        # Find the squares with the fewest available possibilities
+        search_options = best_search_options(puzzle)
+
+        # For each of those squares, assign each option and collect the results
+        assign_results = for {search_cell, option} <- search_options, do: assign(puzzle, search_cell, option)
+        
+        # Search the resulting boards
+        searchable_puzzles = for {response, result} <- assign_results, response == :ok, do: result
+
+        # Search through the possibilities until we come across a solution
+        search_results = Enum.reduce_while(searchable_puzzles, [], fn (searchable_puzzle, acc) -> 
+            case search(searchable_puzzle) do
+              {:halt, result} -> {:halt, result}  # Found a solution
+              result -> {:cont, acc ++ [result]}  # No solutions just yet
+            end
+          end)
+      end
+    end
+
+    defp best_search_options(puzzle) do
+      search_options = for cell <- @cells, length(puzzle[cell]) > 1, do: {cell, puzzle[cell], length(puzzle[cell])}
+      min_options = Enum.map(search_options, fn({search_cell, options, len}) -> len end) |> Enum.min
+      {search_options, _} = Enum.partition(search_options, fn({search_cell, option, len}) -> len == min_options end)
+      search_options = (for {search_cell, options, _} <- search_options, do: for option <- options, do: {search_cell, option}) |> List.flatten
+
+      search_options
+    end
+
+    defp is_solved(puzzle) do
+      options = Enum.reduce(Map.values(puzzle), 0, fn (cell, count) -> count + length(cell) end)
+      if (options == 81), do: true, else: false
     end
 
     @doc """
