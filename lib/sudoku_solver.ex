@@ -34,7 +34,7 @@ defmodule SudokuSolver do
     end
 
     def parse_grid(puzzle) do
-        default_playfield = Map.new(for cell <- @cells, do: {cell, @cols})
+        default_playfield = Map.new(for cell <- @cells, do: {cell, "123456789"})
         puzzle_playfield = grid_values(puzzle)
 
         # Go through and add all the values from the provided puzzle to a default playfield
@@ -54,15 +54,16 @@ defmodule SudokuSolver do
         of that cell.
     """
     def assign(puzzle, cell, value) do
-        other_values = List.delete(puzzle[cell], value)
+        other_values = String.replace(puzzle[cell], value, "")
         eliminate(puzzle, cell, other_values)
     end
 
-    def eliminate(puzzle, _cell, []) do
+    def eliminate(puzzle, _cell, "") do
       {:ok, puzzle}
     end
 
-    def eliminate(puzzle, cell, [ value | remaining ]) do
+    def eliminate(puzzle, cell, values) do
+        {value, remaining} = String.split_at(values, 1)
         case strip_out(puzzle, cell, value) do
           {:ok, puzzle} -> eliminate(puzzle, cell, remaining)
           {:error, message} -> {:error, message}
@@ -77,17 +78,17 @@ defmodule SudokuSolver do
     end
 
     def eliminate_individual(puzzle, cell, value) do
-        if Enum.member?(puzzle[cell], value) do
+        if String.contains?(puzzle[cell], value) do
             # Actually gotta check for solution, propogate constraints
-            puzzle = Map.put(puzzle, cell, List.delete(puzzle[cell], value))
+            puzzle = Map.put(puzzle, cell, String.replace(puzzle[cell], value, ""))
             cond do
-              puzzle[cell] |> length == 0 ->
+              puzzle[cell] |> String.length == 0 ->
                 {:error, "Contradiction: Eliminated all possibilites for cell #{cell}"}
-              puzzle[cell] |> length == 1 ->
+              puzzle[cell] |> String.length == 1 ->
                 Enum.reduce_while(@peers[cell],
                             {nil, puzzle},
                             fn(new_cell, puzztup) ->
-                              {response, result} = strip_out(elem(puzztup, 1), new_cell, List.first(puzzle[cell]))
+                              {response, result} = strip_out(elem(puzztup, 1), new_cell, String.first(puzzle[cell]))
                               cond do
                                 response == :ok -> {:cont, {response, result}}
                                 response == :error -> {:halt, {response, result}}
@@ -107,7 +108,7 @@ defmodule SudokuSolver do
       Enum.reduce_while(@units[cell], {nil, puzzle}, fn(unit, puzztup) ->
         {response, result} = Enum.reduce_while(unit, puzztup, fn(u, puzztup) ->
           my_puzzle = elem(puzztup, 1)
-          dplaces = for s <- unit, Enum.member?(my_puzzle[s], value), do: s
+          dplaces = for s <- unit, String.contains?(my_puzzle[s], value), do: s
           cond do
             # If we remove the last option for a cell, bail
             length(dplaces) == 0 -> {:halt, {:error, "Unable to place #{value} after modifying #{cell}"}}
@@ -165,16 +166,16 @@ defmodule SudokuSolver do
     end
 
     defp best_search_options(puzzle) do
-      search_options = for cell <- @cells, length(puzzle[cell]) > 1, do: {cell, puzzle[cell], length(puzzle[cell])}
+      search_options = for cell <- @cells, String.length(puzzle[cell]) > 1, do: {cell, puzzle[cell], String.length(puzzle[cell])}
       min_options = Enum.map(search_options, fn({search_cell, options, len}) -> len end) |> Enum.min
       {search_options, _} = Enum.partition(search_options, fn({search_cell, option, len}) -> len == min_options end)
-      search_options = (for {search_cell, options, _} <- search_options, do: for option <- options, do: {search_cell, option}) |> List.flatten
+      search_options = (for {search_cell, options, _} <- search_options, do: for option <- String.codepoints(options), do: {search_cell, option}) |> List.flatten
 
       search_options
     end
 
     defp is_solved(puzzle) do
-      options = Enum.reduce(Map.values(puzzle), 0, fn (cell, count) -> count + length(cell) end)
+      options = Enum.reduce(Map.values(puzzle), 0, fn (cell, count) -> count + String.length(cell) end)
       if (options == 81), do: true, else: false
     end
 
@@ -182,7 +183,7 @@ defmodule SudokuSolver do
         Displays a parsed puzzle as a 2D grid of values
     """
     def display(puzzle) when is_map(puzzle) do
-        width = 1 + Enum.max(for value <- Map.values(puzzle), do: length(value))
+        width = 1 + Enum.max(for value <- Map.values(puzzle), do: String.length(value))
         line = [String.duplicate("-", width * 3)]
         lines = line ++ line ++ line
         horizontal_bar = Enum.join(lines, "+") <> "\n"
@@ -192,7 +193,7 @@ defmodule SudokuSolver do
         rows_text = for row <- @rows do
             cols_text = for col <- @cols do
                 cell = row <> col
-                cell_text = String.pad_trailing(Enum.join(puzzle[cell]), width)
+                cell_text = String.pad_trailing(puzzle[cell], width)
                 cell_text <> if col in delimiters, do: "|", else: ""
             end
             Enum.join(cols_text ++ [("\n" <> if row in delimiters, do: horizontal_bar, else: "")])
